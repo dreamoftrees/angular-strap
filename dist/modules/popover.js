@@ -1,6 +1,6 @@
 /**
  * angular-strap
- * @version v2.1.2 - 2014-10-19
+ * @version v2.1.2 - 2014-10-20
  * @link http://mgcrea.github.io/angular-strap
  * @author Olivier Louvignes (olivier@mg-crea.com)
  * @license MIT License, http://www.opensource.org/licenses/MIT
@@ -24,7 +24,8 @@ angular.module('mgcrea.ngStrap.popover', ['mgcrea.ngStrap.tooltip'])
       html: false,
       title: '',
       content: '',
-      delay: 0
+      delay: 0,
+      autoClose: true
     };
 
     this.$get = ["$tooltip", function($tooltip) {
@@ -51,7 +52,7 @@ angular.module('mgcrea.ngStrap.popover', ['mgcrea.ngStrap.tooltip'])
 
   })
 
-  .directive('bsPopover', ["$window", "$sce", "$popover", function($window, $sce, $popover) {
+  .directive('bsPopover', ['$document', '$window', '$sce', '$popover', function($document, $window, $sce, $popover) {
 
     var requestAnimationFrame = $window.requestAnimationFrame || $window.setTimeout;
 
@@ -62,7 +63,7 @@ angular.module('mgcrea.ngStrap.popover', ['mgcrea.ngStrap.tooltip'])
 
         // Directive options
         var options = {scope: scope};
-        angular.forEach(['template', 'contentTemplate', 'placement', 'container', 'target', 'delay', 'trigger', 'keyboard', 'html', 'animation', 'customClass'], function(key) {
+        angular.forEach(['template', 'contentTemplate', 'placement', 'container', 'target', 'delay', 'trigger', 'keyboard', 'html', 'animation', 'customClass', 'autoClose'], function(key) {
           if(angular.isDefined(attr[key])) options[key] = attr[key];
         });
 
@@ -98,8 +99,42 @@ angular.module('mgcrea.ngStrap.popover', ['mgcrea.ngStrap.tooltip'])
         // Initialize popover
         var popover = $popover(element, options);
 
+        if(options.autoClose) {
+            angular.element($document.body).bind('click', function (e) {
+
+                // Find all elements with the popover attribute
+                var popups = document.querySelectorAll('*[bs-popover]');
+                if(popups) {
+                    for(var i=0; i<popups.length; i++) {
+                        var popup = popups[i];
+                        var popupElement = angular.element(popup);
+
+                        var content;
+                        var arrow;
+                        if(popupElement.next()) {
+                            content = popupElement.next()[0].querySelector('.popover-content');
+                            arrow = popupElement.next()[0].querySelector('.arrow');
+                        }
+                        //If the following condition is met, then the click does not correspond
+                        //to a click on the current popover in the loop or its content.
+                        //So, we can safely remove the current popover's content and set the scope property of the popover
+                        if(popup != e.target && e.target != content && e.target != arrow) {
+                            if(popupElement.next().hasClass('popover')) {
+                                //Remove the popover content
+                                popupElement.next().remove();
+                                //Set the scope to reflect this
+                                popupElement.attr('bs-show', false);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         // Garbage collection
         scope.$on('$destroy', function() {
+
+          if(options.autoClose) angular.element($document.body).unbind('click');
           if (popover) popover.destroy();
           options = null;
           popover = null;
