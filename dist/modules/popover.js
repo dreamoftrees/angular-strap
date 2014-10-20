@@ -99,36 +99,59 @@ angular.module('mgcrea.ngStrap.popover', ['mgcrea.ngStrap.tooltip'])
         // Initialize popover
         var popover = $popover(element, options);
 
+        // Bind the click to remove
         if(options.autoClose) {
-            angular.element($document.body).bind('click', function (e) {
+          scope.$on('tooltip.show', function($tooltip) {
 
-                // Find all elements with the popover attribute
-                var popups = document.querySelectorAll('*[bs-popover]');
-                if(popups) {
-                    for(var i=0; i<popups.length; i++) {
-                        var popup = popups[i];
-                        var popupElement = angular.element(popup);
+              angular.element($document[0].body).bind('click', function (e) {
 
-                        var content;
-                        var arrow;
-                        if(popupElement.next()) {
-                            content = popupElement.next()[0].querySelector('.popover-content');
-                            arrow = popupElement.next()[0].querySelector('.arrow');
-                        }
-                        //If the following condition is met, then the click does not correspond
-                        //to a click on the current popover in the loop or its content.
-                        //So, we can safely remove the current popover's content and set the scope property of the popover
-                        if(popup != e.target && e.target != content && e.target != arrow) {
-                            if(popupElement.next().hasClass('popover')) {
-                                //Remove the popover content
-                                popupElement.next().remove();
-                                //Set the scope to reflect this
-                                popupElement.attr('bs-show', false);
-                            }
-                        }
-                    }
-                }
-            });
+                  // Dont close all popups just close this one..
+                  //var popups = $document.querySelectorAll('*[bs-popover]');
+                  var popups = [element];
+                  if(popups) {
+                      for(var i=0; i<popups.length; i++) {
+                          var popup = popups[i];
+                          var popupElement = angular.element(popup);
+                          var popupContainer = popupElement.next();
+                          if(popupContainer.length && popupContainer.hasClass('popover')) {
+
+                              var isInside = false;
+                              if(popupContainer == e.target) {
+
+                                  // Clicking on the popup
+                                  isInside = true;
+                              } else {
+
+                                  // Test to see if inside
+                                  var popupContents = popupContainer.find('*');
+                                  var popupContent;
+                                  if (popupContents.length > 0) {
+                                      for (var i = 0, m = popupContents.length; i < m; i++) {
+                                          popupContent = popupContents[i];
+                                          if (popupContent == e.target) {
+                                              isInside = true;
+                                              break;
+                                          }
+                                      }
+                                  }
+                              }
+
+                              if(!isInside) {
+                                  popupElement.scope().$hide();
+                              }
+                          }
+                      }
+                  }
+              });
+          });
+
+          scope.$on('tooltip.hide.before', function($tooltip) {
+              if(options.autoClose) angular.element($document[0].body).unbind('click');
+          });
+        }
+
+        scope.$hide = function() {
+          popover.hide();
         }
 
         // Garbage collection
