@@ -1,18 +1,48 @@
 'use strict';
 
 beforeEach(function() {
-  this.addMatchers({
-    toEquals: function(expected) {
-      this.message = function() {
-        return 'Expected "' + angular.mock.dump(this.actual) + '" to equal "' + angular.mock.dump(expected) + '".';
+  jasmine.addMatchers({
+    toEquals: function(util, customEqualityTesters) {
+      return {
+        compare: function(actual, expected) {
+          var result = {};
+          result.pass = angular.equals(actual, expected);
+          result.message = 'Expected "' + angular.mock.dump(actual) + '" to equal "' + angular.mock.dump(expected) + '".';
+          return result;
+        }
       };
-      return angular.equals(this.actual, expected);
     },
-    toHaveClass: function(cls) {
-      this.message = function() {
-        return 'Expected "' + angular.mock.dump(this.actual) + '" to have class "' + cls + '".';
+    toHaveClass: function(util, customEqualityTesters) {
+      return {
+        compare: function(actual, expected) {
+          var result = {};
+          result.pass = actual.hasClass(expected);
+          result.message = 'Expected "' + angular.mock.dump(actual) + '" to have class "' + expected + '".';
+          return result;
+        }
       };
-      return this.actual.hasClass(cls);
     }
   });
 });
+
+/*
+ * Counts the number of scopes beginning with the 
+ * passed in scope s.
+ * It counts scopes recursively by traversing each 
+ * of the child scopes.
+ * 
+ * returns the number of scopes found
+ *
+ * s -> scope to begin with
+ * count -> current scope count, should begin with 0
+ */
+function countScopes(s, count) {
+  if (s != null) {
+    s = s.$$childHead;
+    while (s != null) {
+      count = countScopes(s, count);
+      s = s.$$nextSibling;
+    }
+  }
+  return ++count;
+}

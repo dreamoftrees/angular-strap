@@ -44,6 +44,10 @@ describe('timepicker', function() {
       scope: {selectedDate: new Date(1970, 0, 1, 10, 30), onChange: function() {}},
       element: '<input type="text" ng-model="selectedTime" ng-change="onChange()" bs-timepicker>'
     },
+    'markup-ngRequired': {
+      scope: {selectedTime: new Date(2012, 5, 15, 9, 30)},
+      element: '<input type="text" ng-model="selectedTime" ng-required="true" bs-timepicker>'
+    },
     'options-animation': {
       element: '<div class="btn" data-animation="am-flip-x" ng-model="timepickeredIcon" ng-options="icon.value as icon.label for icon in icons" bs-timepicker></div>'
     },
@@ -100,6 +104,10 @@ describe('timepicker', function() {
     'options-modelTimeFormat': {
       scope: {selectedTime: '12:20:00'},
       element: '<input type="text" ng-model="selectedTime" data-time-type="string" data-model-time-format="HH:mm:ss" data-time-format="HH:mm" bs-timepicker>'
+    },
+    'options-arrowBehavior': {
+      scope: {selectedTime: new Date(1970, 0, 1, 10, 30), arrowBehavior: 'pager'},
+      element: '<input type="text" ng-model="selectedTime" length="5" data-arrow-behavior="{{ arrowBehavior }}" bs-timepicker>'
     },
     'bsShow-attr': {
       scope: {selectedTime: new Date()},
@@ -171,6 +179,10 @@ describe('timepicker', function() {
       expect(scope.selectedTime.toISOString().substr(0, 10)).toBe('1970-01-01');
       angular.element(sandboxEl.find('.dropdown-menu tbody .btn:contains(12)')).triggerHandler('click');
       expect(scope.selectedTime.toISOString().substr(0, 10)).toBe('1970-01-01');
+      angular.element(sandboxEl.find('.dropdown-menu tbody .btn:contains(11)')).triggerHandler('click');
+      expect(elm.val()).toBe('11:30 AM');
+      expect(scope.selectedTime).toEqual(new Date(1970, 0, 1, 11, 30));
+      expect(scope.selectedTime.toISOString().substr(0, 10)).toBe('1970-01-01');
     });
 
     it('should correctly parse input time', function() {
@@ -230,7 +242,7 @@ describe('timepicker', function() {
       var elm = compileDirective('default');
       elm.val('');
       angular.element(elm[0]).triggerHandler('change');
-      expect(scope.selectedTime).toBeUndefined();
+      expect(scope.selectedTime).toBeNull();
     });
 
     it('should support ngRepeat markup', function() {
@@ -243,16 +255,111 @@ describe('timepicker', function() {
     it('should support ngChange markup', function() {
       var elm = compileDirective('markup-ngChange');
       angular.element(elm[0]).triggerHandler('focus');
-      var spy = spyOn(scope, 'onChange').andCallThrough();
+      var spy = spyOn(scope, 'onChange').and.callThrough();
       angular.element(sandboxEl.find('.dropdown-menu tbody .btn:eq(1)')[0]).triggerHandler('click');
       expect(spy).toHaveBeenCalled();
     });
+
+    it('should support ngRequired markup', function() {
+      var elm = compileDirective('markup-ngRequired');
+
+      expect(elm.val()).toBe('9:30 AM');
+      expect(scope.selectedTime).toBeDefined();
+      expect(scope.selectedTime).toEqual(new Date(2012, 5, 15, 9, 30));
+
+      angular.element(elm[0]).triggerHandler('focus');
+      expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(0) .btn-primary').text()).toBe(dateFilter(scope.selectedTime, 'h'));
+      expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(2) .btn-primary').text()).toBe(dateFilter(scope.selectedTime, 'mm'));
+      expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(4) .btn-primary').text()).toBe(dateFilter(scope.selectedTime, 'a'));
+
+    });
+
+    it('should consider empty value valid-date with ngRequired markup', function() {
+      var elm = compileDirective('markup-ngRequired');
+
+      // we don't check ng-valid-parse because AngularJs 1.2
+      // doesn't use that class
+
+      expect(elm.hasClass('ng-valid')).toBe(true);
+      expect(elm.hasClass('ng-valid-required')).toBe(true);
+
+      angular.element(elm[0]).triggerHandler('focus');
+      elm.val('');
+      angular.element(elm[0]).triggerHandler('change');
+
+      // if input is empty, consider valid-date and let
+      // ngRequired invalidate the value
+      expect(elm.hasClass('ng-valid-date')).toBe(true);
+      expect(elm.hasClass('ng-invalid')).toBe(true);
+      expect(elm.hasClass('ng-invalid-required')).toBe(true);
+    });
+
+    it('should consider empty value valid-parse without ngRequired markup', function() {
+      var elm = compileDirective('default');
+
+      // we don't check ng-valid-parse because AngularJs 1.2
+      // doesn't use that class
+
+      expect(elm.hasClass('ng-valid')).toBe(true);
+
+      angular.element(elm[0]).triggerHandler('focus');
+      elm.val('');
+      angular.element(elm[0]).triggerHandler('change');
+
+      // if input is empty, consider valid-date and let
+      // other validators run
+      expect(elm.hasClass('ng-valid-date')).toBe(true);
+      expect(elm.hasClass('ng-valid')).toBe(true);
+    });
+
+
 
     // iit('should only build the timepicker once', function() {
     //   var elm = compileDirective('value-past');
     //   angular.element(elm[0]).triggerHandler('focus');
     // });
 
+  });
+
+  describe('resource allocation', function() {
+    it('should not create additional scopes after first show', function() {
+      var elm = compileDirective('default');
+      angular.element(elm[0]).triggerHandler('focus');
+      $animate.triggerCallbacks();
+      expect(sandboxEl.children('.dropdown-menu.timepicker').length).toBe(1);
+      angular.element(elm[0]).triggerHandler('blur');
+      $animate.triggerCallbacks();
+      expect(sandboxEl.children('.dropdown-menu.timepicker').length).toBe(0);
+
+      var scopeCount = countScopes(scope, 0);
+
+      for (var i = 0; i < 10; i++) {
+        angular.element(elm[0]).triggerHandler('focus');
+        $animate.triggerCallbacks();
+        angular.element(elm[0]).triggerHandler('blur');
+        $animate.triggerCallbacks();
+      }
+
+      expect(countScopes(scope, 0)).toBe(scopeCount);
+    });
+
+    it('should destroy scopes when destroying directive scope', function() {
+      var scopeCount = countScopes(scope, 0);
+      var originalScope = scope;
+      scope = scope.$new();
+      var elm = compileDirective('default');
+
+      for (var i = 0; i < 10; i++) {
+        angular.element(elm[0]).triggerHandler('focus');
+        $animate.triggerCallbacks();
+        angular.element(elm[0]).triggerHandler('blur');
+        $animate.triggerCallbacks();
+      }
+
+      scope.$destroy();
+      scope = originalScope;
+      expect(countScopes(scope, 0)).toBe(scopeCount);
+    });
   });
 
   describe('bsShow attribute', function() {
@@ -444,7 +551,7 @@ describe('timepicker', function() {
       it('should support keyboard navigation', function() {
         var elm = compileDirective('default');
         expect(sandboxEl.children('.dropdown-menu.timepicker').length).toBe(0);
-        elm[0].focus();
+        angular.element(elm[0]).triggerHandler('focus');
         $animate.triggerCallbacks();
         expect(sandboxEl.children('.dropdown-menu.timepicker').length).toBe(1);
         // dump(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(0) .btn-primary').text());
@@ -558,6 +665,28 @@ describe('timepicker', function() {
         expect(elm.hasClass('ng-invalid-min')).toBeTruthy();
       });
 
+      it('should trigger validation when minTime changes', function() {
+        var elm = compileDirective('options-minTime');
+
+        elm.val('10:00 AM'); // valid
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-valid-min')).toBeTruthy();
+
+        elm.val('8:00 AM'); // invalid
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-invalid-min')).toBeTruthy();
+
+        scope.minTime = '07:00 AM'; // valid again
+        scope.$digest();
+        expect(elm.hasClass('ng-valid-min')).toBeTruthy();
+      });
+
+      it('should ignore date part of ngModel when validating with minTime', function() {
+        var elm = compileDirective('options-minTime', { selectedTime: new Date(1957, 6, 13, 10, 30)});
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-valid-min')).toBeTruthy();
+      });
+
     });
 
     describe('maxTime', function() {
@@ -620,6 +749,28 @@ describe('timepicker', function() {
         expect(elm.hasClass('ng-invalid-max')).toBeTruthy();
       });
 
+      it('should trigger validation when maxTime changes', function() {
+        var elm = compileDirective('options-maxTime');
+
+        elm.val('8:00 PM'); // valid
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-valid-max')).toBeTruthy();
+
+        elm.val('11:00 PM'); // invalid
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-invalid-max')).toBeTruthy();
+
+        scope.maxTime = '11:00 PM'; // valid again
+        scope.$digest();
+        expect(elm.hasClass('ng-valid-max')).toBeTruthy();
+      });
+
+      it('should ignore date part of ngModel when validating with maxTime', function() {
+        var elm = compileDirective('options-maxTime', { selectedTime: new Date(1987, 6, 13, 10, 30)});
+        angular.element(elm[0]).triggerHandler('change');
+        expect(elm.hasClass('ng-valid-max')).toBeTruthy();
+      });
+
     });
 
     describe('useNative', function() {
@@ -632,27 +783,56 @@ describe('timepicker', function() {
 
     });
 
-  });
+    describe('modelTimeFormat', function() {
 
-  describe('modelTimeFormat', function() {
+      it('should support a custom modelTimeFormat', function() {
+        var elm = compileDirective('options-modelTimeFormat');
 
-    it('should support a custom modelTimeFormat', function() {
-      var elm = compileDirective('options-modelTimeFormat');
+        // Should have the predefined value
+        expect(elm.val()).toBe('12:20');
 
-      // Should have the predefined value
-      expect(elm.val()).toBe('12:20');
+        // Should correctly set the model value if set via the datepicker
+        angular.element(elm[0]).triggerHandler('focus');
+        angular.element(sandboxEl.find('.dropdown-menu tbody .btn:contains(13)')).triggerHandler('click');
+        expect(elm.val()).toBe('13:20');
+        expect(scope.selectedTime).toBe('13:20:00');
 
-      // Should correctly set the model value if set via the datepicker
-      angular.element(elm[0]).triggerHandler('focus');
-      angular.element(sandboxEl.find('.dropdown-menu tbody .btn:contains(13)')).triggerHandler('click');
-      expect(elm.val()).toBe('13:20');
-      expect(scope.selectedTime).toBe('13:20:00');
+        // Should correctly set the model if the date is manually typed into the input
+        elm.val('10:00');
+        angular.element(elm[0]).triggerHandler('change');
+        scope.$digest();
+        expect(scope.selectedTime).toBe('10:00:00');
 
-      // Should correctly set the model if the date is manually typed into the input
-      elm.val('10:00');
-      angular.element(elm[0]).triggerHandler('change');
-      scope.$digest();
-      expect(scope.selectedTime).toBe('10:00:00');
+      });
+
+    });
+
+    describe('arrowBehavior', function() {
+
+      it('should scroll values shown when set to pager', function() {
+        var elm = compileDirective('options-arrowBehavior');
+
+        angular.element(elm[0]).triggerHandler('focus');
+        expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(0) .btn-primary').text()).toBe(dateFilter(scope.selectedTime, 'h'));
+
+        sandboxEl.find('.dropdown-menu thead button:eq(0)').triggerHandler('click');
+
+        // picker should scroll 5 hours (data-length)
+        var newMiddleHour = new Date(scope.selectedTime.getTime() - (5 * 60 * 60 * 1000));
+        expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(0)').text()).toBe(dateFilter(newMiddleHour, 'h'));
+      });
+
+      it('should change ngModel value when set to picker', function() {
+        var elm = compileDirective('options-arrowBehavior', { arrowBehavior: 'picker' });
+
+        // we are going to increment time by 1 hour
+        var testTime = new Date(scope.selectedTime.getTime() + (1 * 60 * 60 * 1000));
+
+        angular.element(elm[0]).triggerHandler('focus');
+        expect(sandboxEl.find('.dropdown-menu tbody tr:eq(2) td:eq(0) .btn-primary').text()).toBe(dateFilter(scope.selectedTime, 'h'));
+        sandboxEl.find('.dropdown-menu thead button:eq(0)').triggerHandler('click');
+        expect(scope.selectedTime).toEqual(testTime);
+      });
 
     });
 
